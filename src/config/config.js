@@ -4,13 +4,15 @@ const Joi = require("joi");
 
 dotenv.config({ path: path.join(__dirname, "../../.env") });
 
-const envVarsSchema = Joi.object()
+// Base schema - MONGODB_URL_DEV is optional
+const baseEnvVarsSchema = Joi.object()
   .keys({
     NODE_ENV: Joi.string().valid("production", "development").required(),
     PORT: Joi.number().default(3000),
     CLIENT_URL: Joi.string().allow("*").default("*"),
     MONGODB_URL: Joi.string().required().description("Mongo DB url"),
-    MONGODB_URL_DEV: Joi.string().required().description("Mongo DB url"),
+    // MONGODB_URL_DEV is only required in development, optional in production
+    MONGODB_URL_DEV: Joi.string().optional().allow("").description("Mongo DB url for development"),
     JWT_SECRET: Joi.string().required().description("JWT secret key"),
     JWT_ACCESS_EXPIRATION_MINUTES: Joi.number()
       .default(30)
@@ -29,12 +31,18 @@ const envVarsSchema = Joi.object()
   })
   .unknown();
 
-const { value: envVars, error } = envVarsSchema
+// Validate base schema first
+const { value: envVars, error: baseError } = baseEnvVarsSchema
   .prefs({ errors: { label: "key" } })
   .validate(process.env);
 
-if (error) {
-  throw new Error(`Config validation error: ${error.message}`);
+// Additional validation: MONGODB_URL_DEV is required in development
+if (!baseError && envVars.NODE_ENV === "development" && !envVars.MONGODB_URL_DEV) {
+  throw new Error("Config validation error: MONGODB_URL_DEV is required when NODE_ENV=development");
+}
+
+if (baseError) {
+  throw new Error(`Config validation error: ${baseError.message}`);
 }
 
 module.exports = {
